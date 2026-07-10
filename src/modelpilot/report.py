@@ -1,7 +1,7 @@
 """The high-level object users interact with."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
@@ -193,6 +193,7 @@ def analyze(
     target: str | None = None,
     task: str | None = None,
     probe_nonlinearity: bool = True,
+    weights: dict[str, float] | None = None,
 ) -> DatasetReport:
     """Analyze a dataset and return a :class:`DatasetReport`.
 
@@ -208,6 +209,9 @@ def analyze(
         Force ``"classification"`` or ``"regression"``; inferred if omitted.
     probe_nonlinearity:
         Run the quick linear-vs-tree probe (adds a couple of seconds).
+    weights:
+        Optional meta-learned rule multipliers from :func:`modelpilot.meta.load`
+        (or :func:`modelpilot.meta.fit`) to rescale the scoring rules.
 
     Examples
     --------
@@ -235,5 +239,5 @@ def analyze(
 
     prof = profiling.profile(X, y_series, task=task)
     pats = patterns_mod.detect(prof, X, y_series, probe_nonlinearity=probe_nonlinearity)
-    recs = recommend_mod.recommend(prof, pats)
+    recs = recommend_mod.recommend(prof, pats, weights=weights)
     return DatasetReport(prof, pats, recs, X, y_series)

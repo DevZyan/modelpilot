@@ -14,7 +14,14 @@ from .profiling import profile, DatasetProfile
 from .patterns import detect, Pattern
 from .recommend import recommend, Recommendation
 from .benchmark import benchmark, BenchmarkResult
-from .catalog import CATALOG, ModelFamily
+from . import meta
+from .catalog import (
+    CATALOG,
+    ModelFamily,
+    register_model_family,
+    unregister_model_family,
+    list_model_families,
+)
 
 __version__ = "0.1.0"
 
@@ -30,7 +37,11 @@ __all__ = [
     "Recommendation",
     "benchmark",
     "BenchmarkResult",
+    "meta",
     "CATALOG",
     "ModelFamily",
+    "register_model_family",
+    "unregister_model_family",
+    "list_model_families",
     "__version__",
 ]

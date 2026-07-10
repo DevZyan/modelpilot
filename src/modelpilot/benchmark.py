@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -67,8 +67,14 @@ def _preprocessor(profile: DatasetProfile):
 
 def _estimator(key: str, task: str):
     """Return an estimator instance for a catalog key, or None if unavailable."""
+    from .catalog import custom_builder
+
+    builder = custom_builder(key)
+    if builder is not None:
+        return builder(task)
+
     from sklearn.linear_model import (
-        LogisticRegression, Ridge, RidgeClassifier, ElasticNet,
+        LogisticRegression, Ridge, ElasticNet,
     )
     from sklearn.ensemble import (
         RandomForestClassifier, RandomForestRegressor,
@@ -166,6 +172,6 @@ def benchmark(
 
 
 def _display_name(key: str) -> str:
-    from .catalog import BY_KEY
-    m = BY_KEY.get(key)
+    from .catalog import get_family
+    m = get_family(key)
     return m.name if m else key

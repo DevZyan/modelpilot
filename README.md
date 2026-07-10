@@ -62,12 +62,41 @@ report = mp.analyze(data, target="col")     # or: mp.analyze(X, y=y)
 report.profile          # DatasetProfile (all meta-features, .to_dict())
 report.patterns         # list[Pattern] with codes, severities, explanations
 report.recommend(3)     # top-3 recommendations, each with .reasons
-report.benchmark(5)     # cross-validated leaderboard
+report.benchmark(5)     # cross-validated scores for the shortlist
+report.leaderboard(5)   # heuristic rank + measured score, side by side
+report.to_html()        # self-contained HTML report (also .save_html(path))
 report.to_dict()        # everything, JSON-serialisable
 ```
 
 Each layer is usable on its own: `mp.profile(X, y)`, `mp.detect(profile)`,
 `mp.recommend(profile, patterns)`, `mp.benchmark(...)`.
+
+### Plug in your own model families
+
+```python
+from sklearn.ensemble import ExtraTreesClassifier
+
+fam = mp.ModelFamily("extra_trees", "Extra Trees", ("classification",),
+                     "Randomised trees.", frozenset({"tree", "ensemble"}))
+
+def score(family, profile, pattern_codes):
+    return [(1.0, "extra randomisation helps on noisy data")] if "OUTLIER_HEAVY" in pattern_codes else []
+
+mp.register_model_family(fam, ExtraTreesClassifier, scorer=score)
+# now it competes in analyze()/recommend()/benchmark() like any built-in
+```
+
+### Calibrate the scorer on data (meta-learning)
+
+```python
+weights = mp.meta.fit(mp.meta.builtin_datasets())   # or your own [(X, y), ...]
+mp.meta.save(weights, "weights.json")
+
+report = mp.analyze(df, target="target", weights=weights)  # data-tuned rules
+```
+
+`meta.fit` learns a multiplier per scoring rule from cross-validated outcomes,
+so the advisor is calibrated empirically while every rule keeps its reason.
 
 ## How the recommendation works
 
@@ -81,11 +110,13 @@ have to take the heuristic on faith.
 
 ## Roadmap
 
-- [ ] HTML report export
-- [ ] Pluggable custom model families
-- [ ] Meta-learned scoring (train the nudge weights on OpenML datasets)
-- [ ] Text / datetime feature detection
-- [ ] `report.leaderboard()` combining heuristic rank + benchmark score
+- [x] HTML report export — `report.to_html()` / `report.save_html(path)`
+- [x] Pluggable custom model families — `mp.register_model_family(...)`
+- [x] Meta-learned scoring — `mp.meta.fit(...)` learns per-rule weights
+- [x] Text / datetime feature detection — `HAS_TEXT` / `HAS_DATETIME` patterns
+- [x] `report.leaderboard()` combining heuristic rank + benchmark score
+- [ ] Native categorical/text handling inside `benchmark()` (TF-IDF, target enc.)
+- [ ] Ship a pre-trained default weight set fit on OpenML
 
 ## Contributing
 
