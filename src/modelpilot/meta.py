@@ -57,7 +57,7 @@ def fit(
     *,
     cv: int = 3,
     ridge_alpha: float = 1.0,
-    clip: tuple[float, float] = (-1.0, 3.0),
+    clip: tuple[float, float] = (0.0, 3.0),
 ) -> dict[str, float]:
     """Learn a ``rule_id -> multiplier`` map from cross-validated outcomes.
 
@@ -71,7 +71,9 @@ def fit(
     ridge_alpha:
         L2 strength of the ridge fit that maps rule contributions to score.
     clip:
-        Clamp learned multipliers to this range so no single rule can dominate.
+        Clamp learned multipliers to this range. The default lower bound of 0
+        keeps each rule's hand-designed direction (a multiplier only scales a
+        rule's magnitude, it never flips its sign).
 
     Returns
     -------
@@ -123,6 +125,22 @@ def load(path: str) -> dict[str, float]:
     """Load weights previously written by :func:`save`."""
     with open(path, encoding="utf-8") as fh:
         return {str(k): float(v) for k, v in json.load(fh).items()}
+
+
+def default_weights() -> dict[str, float]:
+    """Return the calibrated weights bundled with the package (``{}`` if absent).
+
+    These are applied automatically by :func:`modelpilot.analyze` unless you pass
+    ``weights=False`` (raw heuristic) or your own weight dict.
+    """
+    from importlib import resources
+
+    try:
+        res = resources.files("modelpilot").joinpath("data", "default_weights.json")
+        with res.open(encoding="utf-8") as fh:
+            return {str(k): float(v) for k, v in json.load(fh).items()}
+    except (FileNotFoundError, ModuleNotFoundError, OSError):
+        return {}
 
 
 def builtin_datasets() -> list[tuple[Any, Any]]:

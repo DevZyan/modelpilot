@@ -36,6 +36,15 @@ report.summary()          # EDA + patterns + ranked recommendations
 report.benchmark()        # cross-validate the top picks for real scores
 ```
 
+Or from the shell:
+
+```bash
+modelpilot data.csv --target price            # profile + patterns + ranking
+modelpilot data.csv --target price -b          # + cross-validated leaderboard
+modelpilot data.csv --target price --explain   # + top-feature importances
+modelpilot data.csv --target price --html report.html --json report.json
+```
+
 ```
 ==============================================================
   modelpilot report
@@ -64,9 +73,13 @@ report.patterns         # list[Pattern] with codes, severities, explanations
 report.recommend(3)     # top-3 recommendations, each with .reasons
 report.benchmark(5)     # cross-validated scores for the shortlist
 report.leaderboard(5)   # heuristic rank + measured score, side by side
+report.explain()        # fit the top pick, rank the features it relies on
 report.to_html()        # self-contained HTML report (also .save_html(path))
 report.to_dict()        # everything, JSON-serialisable
 ```
+
+By default `analyze()` applies a small set of meta-learned rule weights bundled
+with the package; pass `weights=False` for the raw heuristic, or your own dict.
 
 Each layer is usable on its own: `mp.profile(X, y)`, `mp.detect(profile)`,
 `mp.recommend(profile, patterns)`, `mp.benchmark(...)`.
@@ -115,8 +128,12 @@ have to take the heuristic on faith.
 - [x] Meta-learned scoring — `mp.meta.fit(...)` learns per-rule weights
 - [x] Text / datetime feature detection — `HAS_TEXT` / `HAS_DATETIME` patterns
 - [x] `report.leaderboard()` combining heuristic rank + benchmark score
-- [ ] Native categorical/text handling inside `benchmark()` (TF-IDF, target enc.)
-- [ ] Ship a pre-trained default weight set fit on OpenML
+- [x] Native text/datetime handling inside `benchmark()` (TF-IDF + date parts)
+- [x] Bundled default weight set, auto-applied by `analyze()`
+- [x] `report.explain()` — feature importances for the recommended model
+- [x] Command-line interface (`modelpilot data.csv --target col`)
+- [ ] Larger, OpenML-fit default weights + per-metric calibration
+- [ ] Datetime/text feature engineering surfaced back to the user
 
 ## Contributing
 

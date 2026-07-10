@@ -260,6 +260,21 @@ def test_meta_fit_empty_raises():
         mp.meta.fit([])
 
 
+def test_default_weights_bundled_and_nonneg():
+    w = mp.meta.default_weights()
+    assert w and all(v >= 0.0 for v in w.values())   # shipped, direction-preserving
+
+
+def test_analyze_applies_default_weights(reg_df):
+    # weights=None uses bundled defaults; weights=False disables them.
+    tuned = mp.analyze(reg_df, target="target", probe_nonlinearity=False)
+    raw = mp.analyze(reg_df, target="target", probe_nonlinearity=False, weights=False)
+    # a rule contribution should be rescaled between the two
+    t = {r.key: r.score for r in tuned.recommend()}
+    r = {r.key: r.score for r in raw.recommend()}
+    assert t != r
+
+
 # ---------------- explain ----------------
 
 def test_explain_linear_coefficients(reg_df):
@@ -284,3 +299,30 @@ def test_explain_permutation_fallback(clf_df):
     exp = report.explain(key="knn", top=3)
     assert exp.method == "permutation"
     assert exp.features
+
+
+# ---------------- CLI ----------------
+
+def test_cli_runs_and_writes_outputs(clf_df, tmp_path, capsys):
+    from modelpilot.cli import main
+    csv = tmp_path / "d.csv"
+    clf_df.to_csv(csv, index=False)
+    out_json = tmp_path / "r.json"
+    out_html = tmp_path / "r.html"
+    rc = main([str(csv), "--target", "target", "--no-probe",
+               "--json", str(out_json), "--html", str(out_html)])
+    assert rc == 0
+    assert out_json.exists() and out_html.exists()
+    assert "modelpilot report" in capsys.readouterr().out
+
+
+def test_cli_missing_target_returns_error(clf_df, tmp_path):
+    from modelpilot.cli import main
+    csv = tmp_path / "d.csv"
+    clf_df.to_csv(csv, index=False)
+    assert main([str(csv), "--target", "nope", "--no-probe"]) == 2
+
+
+def test_cli_missing_file_returns_error():
+    from modelpilot.cli import main
+    assert main(["does_not_exist.csv", "--target", "y"]) == 2

@@ -1,0 +1,13 @@
+{
+  "base:hist_gbm": 0.129781896876437,
+  "base:logreg": 0.23833574200986282,
+  "base:random_forest": 0.1693126575892492,
+  "base:regularized_linear": 0.10470213889523573,
+  "collinear:penalty": 0.1258171509743244,
+  "collinear:unstable": 0.0,
+  "imbalance:ensemble": 0.17147221034761276,
+  "imbalance:knn": 0.41165062758249377,
+  "linear:friendly": 0.48215592591529044,
+  "small:overfit": 0.0,
+  "small:simple": 0.0
+}

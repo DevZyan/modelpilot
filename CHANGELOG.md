@@ -12,9 +12,19 @@
   scoring rules.
 - `modelpilot.meta` — meta-learn per-rule scoring weights from cross-validated
   outcomes (`meta.fit`/`save`/`load`); apply via `analyze(..., weights=...)`.
+- `benchmark()` now feeds datetime (year/month/day/weekday/hour) and free-text
+  (TF-IDF) columns into the models instead of dropping them.
+- `report.explain()` — fit the recommended model and rank the features driving
+  it (impurity / coefficient / permutation), with real feature names.
+- Bundled, calibrated default rule weights applied automatically by `analyze()`
+  (`meta.default_weights()`; opt out with `analyze(weights=False)`).
+- `modelpilot` command-line interface: `modelpilot data.csv --target col`
+  with `--benchmark`, `--explain`, `--html`, `--json` options.
 ### Changed
 - Scoring rules now carry stable `rule_id`s and per-rule `contributions`,
   enabling weight calibration without changing rule code.
+- Meta weight multipliers are clamped non-negative so calibration only scales a
+  rule's magnitude, never flips its designed direction.
 
 ## [0.1.0] - 2026-07-06
 ### Added

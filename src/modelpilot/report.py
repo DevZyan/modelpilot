@@ -203,7 +203,7 @@ def analyze(
     target: str | None = None,
     task: str | None = None,
     probe_nonlinearity: bool = True,
-    weights: dict[str, float] | None = None,
+    weights: dict[str, float] | bool | None = None,
 ) -> DatasetReport:
     """Analyze a dataset and return a :class:`DatasetReport`.
 
@@ -220,8 +220,10 @@ def analyze(
     probe_nonlinearity:
         Run the quick linear-vs-tree probe (adds a couple of seconds).
     weights:
-        Optional meta-learned rule multipliers from :func:`modelpilot.meta.load`
-        (or :func:`modelpilot.meta.fit`) to rescale the scoring rules.
+        Meta-learned rule multipliers that rescale the scoring rules. ``None``
+        (default) applies the calibrated weights bundled with the package;
+        ``False`` disables them for the raw heuristic; a dict uses your own (see
+        :func:`modelpilot.meta.fit` / :func:`modelpilot.meta.load`).
 
     Examples
     --------
@@ -246,6 +248,12 @@ def analyze(
 
     if len(X) != len(y_series):
         raise ValueError(f"X has {len(X)} rows but y has {len(y_series)}.")
+
+    if weights is None:
+        from . import meta
+        weights = meta.default_weights() or None
+    elif weights is False:
+        weights = None
 
     prof = profiling.profile(X, y_series, task=task)
     pats = patterns_mod.detect(prof, X, y_series, probe_nonlinearity=probe_nonlinearity)
