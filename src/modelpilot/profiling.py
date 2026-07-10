@@ -24,6 +24,8 @@ class DatasetProfile:
     n_features: int
     n_numeric: int
     n_categorical: int
+    n_datetime: int
+    n_text: int
 
     # Task
     task: str  # "classification" | "regression"
@@ -49,6 +51,8 @@ class DatasetProfile:
 
     numeric_cols: list[str] = field(default_factory=list)
     categorical_cols: list[str] = field(default_factory=list)
+    datetime_cols: list[str] = field(default_factory=list)
+    text_cols: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -90,7 +94,7 @@ def profile(X: pd.DataFrame, y: pd.Series, task: str | None = None) -> DatasetPr
         task = "classification" if is_classification_target(y) else "regression"
 
     n_samples, n_features = X.shape
-    numeric_cols, categorical_cols = split_feature_types(X)
+    numeric_cols, categorical_cols, datetime_cols, text_cols = split_feature_types(X)
     X_num = X[numeric_cols].apply(pd.to_numeric, errors="coerce") if numeric_cols else pd.DataFrame(index=X.index)
 
     # ---- task-specific target stats ----
@@ -141,6 +145,8 @@ def profile(X: pd.DataFrame, y: pd.Series, task: str | None = None) -> DatasetPr
         n_features=int(n_features),
         n_numeric=len(numeric_cols),
         n_categorical=len(categorical_cols),
+        n_datetime=len(datetime_cols),
+        n_text=len(text_cols),
         task=task,
         n_classes=n_classes,
         imbalance_ratio=imbalance_ratio,
@@ -157,4 +163,6 @@ def profile(X: pd.DataFrame, y: pd.Series, task: str | None = None) -> DatasetPr
         target_signal=target_signal,
         numeric_cols=numeric_cols,
         categorical_cols=categorical_cols,
+        datetime_cols=datetime_cols,
+        text_cols=text_cols,
     )

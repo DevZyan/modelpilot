@@ -9,7 +9,7 @@ Quickstart
 """
 from __future__ import annotations
 
-from .report import analyze, DatasetReport
+from .report import analyze, DatasetReport, LeaderboardRow
 from .profiling import profile, DatasetProfile
 from .patterns import detect, Pattern
 from .recommend import recommend, Recommendation
@@ -21,6 +21,7 @@ __version__ = "0.1.0"
 __all__ = [
     "analyze",
     "DatasetReport",
+    "LeaderboardRow",
     "profile",
     "DatasetProfile",
     "detect",

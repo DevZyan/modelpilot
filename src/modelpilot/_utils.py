@@ -1,6 +1,8 @@
 """Internal helpers. Not part of the public API."""
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -33,19 +35,76 @@ def is_classification_target(y: pd.Series, threshold: int = 20) -> bool:
     return False
 
 
-def split_feature_types(X: pd.DataFrame, max_numeric_cardinality: int = 15):
-    """Return (numeric_cols, categorical_cols).
+def _is_stringy(s: pd.Series) -> bool:
+    """True for object / string / str dtypes (covers pandas 3.0's ``str`` dtype)."""
+    return str(s.dtype) in ("object", "string", "str") or pd.api.types.is_string_dtype(s)
 
-    Low-cardinality integer columns are treated as categorical because that is
-    almost always what they encode (e.g. an ordinal 1-5 rating).
+
+def _looks_datetime(s: pd.Series, sample: int = 200, min_success: float = 0.9) -> bool:
+    """True if ``s`` is a datetime dtype or an object column that parses as dates."""
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return True
+    if not _is_stringy(s):
+        return False
+    non_null = s.dropna()
+    if non_null.empty:
+        return False
+    # Pure numbers ("42", 3.14) parse as datetimes but almost never are dates.
+    head = non_null.head(sample)
+    if all(_is_number_like(v) for v in head):
+        return False
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        parsed = pd.to_datetime(head, errors="coerce")
+    return float(parsed.notna().mean()) >= min_success
+
+
+def _is_number_like(v: Any) -> bool:
+    try:
+        float(v)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _mean_word_count(s: pd.Series, sample: int = 500) -> float:
+    non_null = s.dropna().astype(str).head(sample)
+    if non_null.empty:
+        return 0.0
+    return float(np.mean([len(v.split()) for v in non_null]))
+
+
+def _looks_text(s: pd.Series, n_rows: int, mean_words_min: float = 3.0) -> bool:
+    """Free-text heuristic: many distinct values *and* multi-word content.
+
+    Distinguishes prose/comments from high-cardinality categoricals (IDs, codes),
+    which are single tokens even when unique.
     """
-    numeric, categorical = [], []
+    if not _is_stringy(s):
+        return False
+    nunique = s.nunique(dropna=True)
+    high_card = nunique > max(20, 0.5 * n_rows)
+    return high_card and _mean_word_count(s) >= mean_words_min
+
+
+def split_feature_types(X: pd.DataFrame, max_numeric_cardinality: int = 15):
+    """Classify columns into (numeric, categorical, datetime, text).
+
+    * Low-cardinality integer columns -> categorical (e.g. an ordinal 1-5 rating).
+    * Datetime dtypes or date-parseable object columns -> datetime.
+    * High-cardinality multi-word object columns -> text (free prose).
+    * Everything else object/category/bool -> categorical.
+    """
+    numeric, categorical, datetime, text = [], [], [], []
     n_rows = max(len(X), 1)
     for col in X.columns:
         s = X[col]
-        if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s):
+        if pd.api.types.is_bool_dtype(s):
+            categorical.append(col)
+        elif pd.api.types.is_numeric_dtype(s):
             nunique = s.nunique(dropna=True)
-            # Small distinct integer set relative to rows -> categorical.
             if (
                 pd.api.types.is_integer_dtype(s)
                 and nunique <= max_numeric_cardinality
@@ -54,9 +113,13 @@ def split_feature_types(X: pd.DataFrame, max_numeric_cardinality: int = 15):
                 categorical.append(col)
             else:
                 numeric.append(col)
+        elif _looks_datetime(s):
+            datetime.append(col)
+        elif _looks_text(s, n_rows):
+            text.append(col)
         else:
             categorical.append(col)
-    return numeric, categorical
+    return numeric, categorical, datetime, text
 
 
 def safe_skew(values: np.ndarray) -> float:

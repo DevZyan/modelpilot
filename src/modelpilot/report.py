@@ -1,7 +1,7 @@
 """The high-level object users interact with."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
@@ -11,6 +11,27 @@ from .benchmark import benchmark as _benchmark, BenchmarkResult
 from .patterns import Pattern
 from .profiling import DatasetProfile
 from .recommend import Recommendation
+
+
+@dataclass
+class LeaderboardRow:
+    """One model family with both its heuristic rank and its empirical score."""
+
+    key: str
+    name: str
+    heuristic_rank: int              # 1-based position in the recommendation ranking
+    heuristic_score: float
+    benchmark_score: float           # NaN if it could not be evaluated
+    metric: str
+    std: float
+    fit_seconds: float
+    error: str | None = None
+
+    def __repr__(self) -> str:  # pragma: no cover - cosmetic
+        if self.error:
+            return f"{self.name}: FAILED ({self.error})"
+        return (f"{self.name}: {self.metric}={self.benchmark_score:.4f} "
+                f"(heuristic #{self.heuristic_rank})")
 
 
 @dataclass
@@ -40,6 +61,37 @@ class DatasetReport:
         keys = [r.key for r in self.recommendations[:top_k]]
         return _benchmark(self._X, self._y, self.profile, keys, cv=cv)
 
+    def leaderboard(self, top_k: int = 5, cv: int = 5) -> list[LeaderboardRow]:
+        """Combine the heuristic ranking with real cross-validated scores.
+
+        Cross-validates the top ``top_k`` recommended families, then returns
+        them sorted by empirical score (best-first, failures last), each row
+        carrying its original heuristic rank so you can see where the advisor
+        and the evidence agree — or don't.
+        """
+        shortlist = self.recommendations[:top_k]
+        rank_of = {r.key: i + 1 for i, r in enumerate(shortlist)}
+        score_of = {r.key: r.score for r in shortlist}
+        results = _benchmark(self._X, self._y, self.profile,
+                             [r.key for r in shortlist], cv=cv)
+        rows = [
+            LeaderboardRow(
+                key=b.key,
+                name=b.name,
+                heuristic_rank=rank_of.get(b.key, 0),
+                heuristic_score=score_of.get(b.key, 0.0),
+                benchmark_score=b.score,
+                metric=b.metric,
+                std=b.std,
+                fit_seconds=b.fit_seconds,
+                error=b.error,
+            )
+            for b in results
+        ]
+        rows.sort(key=lambda r: (r.error is not None,
+                                 -(r.benchmark_score if r.benchmark_score == r.benchmark_score else -1e9)))
+        return rows
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "profile": self.profile.to_dict(),
@@ -55,8 +107,13 @@ class DatasetReport:
         lines.append("  modelpilot report")
         lines.append("=" * 62)
         lines.append(f"  Task            : {p.task}")
+        types = f"{p.n_numeric} numeric, {p.n_categorical} categorical"
+        if p.n_datetime:
+            types += f", {p.n_datetime} datetime"
+        if p.n_text:
+            types += f", {p.n_text} text"
         lines.append(f"  Shape           : {p.n_samples} rows x {p.n_features} features "
-                     f"({p.n_numeric} numeric, {p.n_categorical} categorical)")
+                     f"({types})")
         if p.task == "classification":
             lines.append(f"  Classes         : {p.n_classes} "
                          f"(imbalance {p.imbalance_ratio:.1f}x)" if p.imbalance_ratio
@@ -80,6 +137,45 @@ class DatasetReport:
                 for reason in top:
                     lines.append(f"         {reason}")
         lines.append("=" * 62)
+        text = "\n".join(lines)
+        print(text)
+        return text
+
+    def to_html(self, *, include_leaderboard: bool = False,
+                top_k: int = 5, cv: int = 5) -> str:
+        """Render this report as a self-contained HTML string.
+
+        Set ``include_leaderboard=True`` to cross-validate the top ``top_k``
+        picks and embed the measured-score table (slower).
+        """
+        from .html_report import render_html
+        return render_html(self, include_leaderboard=include_leaderboard,
+                           top_k=top_k, cv=cv)
+
+    def save_html(self, path: str, *, include_leaderboard: bool = False,
+                  top_k: int = 5, cv: int = 5) -> str:
+        """Write the HTML report to ``path`` and return the path."""
+        html = self.to_html(include_leaderboard=include_leaderboard, top_k=top_k, cv=cv)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(html)
+        return path
+
+    def leaderboard_summary(self, top_k: int = 5, cv: int = 5) -> str:
+        """Pretty-print the combined heuristic + benchmark leaderboard."""
+        rows = self.leaderboard(top_k=top_k, cv=cv)
+        lines = ["=" * 70,
+                 "  modelpilot leaderboard  (heuristic rank vs. measured score)",
+                 "=" * 70,
+                 f"  {'#':>2}  {'model':<34}{'heur':>6}{'score':>10}{'±std':>9}",
+                 "  " + "-" * 66]
+        for i, r in enumerate(rows, 1):
+            if r.error:
+                lines.append(f"  {i:>2}  {r.name[:34]:<34}{('#'+str(r.heuristic_rank)):>6}"
+                             f"{'  FAILED':>19}")
+            else:
+                lines.append(f"  {i:>2}  {r.name[:34]:<34}{('#'+str(r.heuristic_rank)):>6}"
+                             f"{r.benchmark_score:>10.4f}{r.std:>9.3f}")
+        lines.append("=" * 70)
         text = "\n".join(lines)
         print(text)
         return text

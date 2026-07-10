@@ -152,6 +152,18 @@ def detect(
         add("CONSTANT_FEATURES", "Constant features",
             f"{p.constant_feature_fraction:.1%} of features are constant — drop them.", "info")
 
+    if p.n_datetime:
+        cols = ", ".join(p.datetime_cols[:3]) + ("…" if p.n_datetime > 3 else "")
+        add("HAS_DATETIME", "Datetime features",
+            f"{p.n_datetime} datetime column(s) ({cols}) — extract year/month/day/"
+            "weekday/hour parts; raw timestamps aren't model-ready.", "info")
+
+    if p.n_text:
+        cols = ", ".join(p.text_cols[:3]) + ("…" if p.n_text > 3 else "")
+        add("HAS_TEXT", "Free-text features",
+            f"{p.n_text} free-text column(s) ({cols}) — vectorise (TF-IDF / embeddings) "
+            "before modeling; they're dropped by the default benchmark.", "info")
+
     # Optional empirical nonlinearity probe.
     if probe_nonlinearity and X is not None and y is not None:
         gap = _nonlinearity_gap(X, y, profile)
