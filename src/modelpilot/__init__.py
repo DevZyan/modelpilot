@@ -14,6 +14,7 @@ from .profiling import profile, DatasetProfile
 from .patterns import detect, Pattern
 from .recommend import recommend, Recommendation
 from .benchmark import benchmark, BenchmarkResult
+from .explain import explain, Explanation
 from . import meta
 from .catalog import (
     CATALOG,
@@ -37,6 +38,8 @@ __all__ = [
     "Recommendation",
     "benchmark",
     "BenchmarkResult",
+    "explain",
+    "Explanation",
     "meta",
     "CATALOG",
     "ModelFamily",

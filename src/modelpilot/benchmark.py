@@ -31,14 +31,47 @@ class BenchmarkResult:
         return f"{self.name}: {self.metric}={self.score:.4f} (±{self.std:.3f})"
 
 
+def _datetime_parts(df) -> np.ndarray:
+    """Expand each datetime column into [year, month, day, weekday, hour]."""
+    df = pd.DataFrame(df)
+    cols = []
+    for c in df.columns:
+        s = pd.to_datetime(df[c], errors="coerce")
+        cols.extend([s.dt.year, s.dt.month, s.dt.day, s.dt.dayofweek, s.dt.hour])
+    return pd.concat(cols, axis=1).to_numpy(dtype=float)
+
+
+def _fill_text(s) -> list[str]:
+    """Coerce a text column to a clean list of strings for the vectorizer."""
+    return pd.Series(s).fillna("").astype(str).tolist()
+
+
+def _to_dense(x):
+    """Densify a (possibly sparse) matrix so every estimator can consume it."""
+    return x.toarray() if hasattr(x, "toarray") else x
+
+
+_DT_PARTS = ("year", "month", "day", "weekday", "hour")
+
+
+def _dt_names(transformer, input_features):
+    """Feature names for the datetime-parts expansion (5 per source column)."""
+    return np.asarray([f"{c}_{part}" for c in input_features for part in _DT_PARTS])
+
+
 def _preprocessor(profile: DatasetProfile):
     from sklearn.compose import ColumnTransformer
     from sklearn.pipeline import Pipeline
     from sklearn.impute import SimpleImputer
-    from sklearn.preprocessing import StandardScaler, OneHotEncoder
+    from sklearn.preprocessing import (
+        StandardScaler, OneHotEncoder, FunctionTransformer,
+    )
+    from sklearn.feature_extraction.text import TfidfVectorizer
 
     num = profile.numeric_cols
     cat = profile.categorical_cols
+    dts = profile.datetime_cols
+    txt = profile.text_cols
 
     try:
         ohe = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
@@ -59,6 +92,26 @@ def _preprocessor(profile: DatasetProfile):
             Pipeline([("impute", SimpleImputer(strategy="most_frequent")),
                       ("ohe", ohe)]),
             cat,
+        ))
+    if dts:
+        transformers.append((
+            "dt",
+            Pipeline([("parts", FunctionTransformer(_datetime_parts, validate=False,
+                                                    feature_names_out=_dt_names)),
+                      ("impute", SimpleImputer(strategy="median")),
+                      ("scale", StandardScaler())]),
+            dts,
+        ))
+    for i, col in enumerate(txt):
+        # A scalar column selector hands the vectorizer a 1-D column of strings.
+        transformers.append((
+            f"txt{i}",
+            Pipeline([("fill", FunctionTransformer(_fill_text, validate=False,
+                                                   feature_names_out="one-to-one")),
+                      ("tfidf", TfidfVectorizer(max_features=200)),
+                      ("dense", FunctionTransformer(_to_dense, validate=False,
+                                                    feature_names_out="one-to-one"))]),
+            col,
         ))
     if not transformers:
         return "passthrough"
@@ -109,6 +162,19 @@ def _estimator(key: str, task: str):
         ),
     }
     return table.get(key)
+
+
+def build_pipeline(profile: DatasetProfile, key: str):
+    """Return an *unfitted* preprocessing + estimator pipeline, or None."""
+    from sklearn.pipeline import Pipeline
+
+    est = _estimator(key, profile.task)
+    if est is None:
+        return None
+    pre = _preprocessor(profile)
+    if pre == "passthrough":
+        return Pipeline([("model", est)])
+    return Pipeline([("pre", pre), ("model", est)])
 
 
 def _scoring(profile: DatasetProfile) -> tuple[str, str]:

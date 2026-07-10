@@ -178,6 +178,25 @@ def test_text_and_datetime_detected():
     assert prof.n_numeric == 1
 
 
+def test_text_column_feeds_benchmark():
+    rng = np.random.RandomState(0)
+    n = 240
+    y = rng.randint(0, 2, n)
+    pos, neg = ["good", "great", "love", "fast"], ["bad", "awful", "hate", "slow"]
+    reviews = [" ".join(rng.choice(pos if t else neg, rng.randint(4, 9))) for t in y]
+    df = pd.DataFrame({
+        "signup": pd.date_range("2020-01-01", periods=n, freq="7D").astype(str),
+        "review": reviews,
+        "target": y,
+    })
+    report = mp.analyze(df, target="target", probe_nonlinearity=False)
+    assert report.profile.text_cols == ["review"]
+    results = report.benchmark(top_k=2, cv=3)
+    ok = [r for r in results if r.error is None]
+    # The text signal is near-perfectly predictive, so scores should be high.
+    assert ok and max(r.score for r in ok) > 0.8
+
+
 def test_pure_numbers_not_datetime():
     rng = np.random.RandomState(0)
     X = pd.DataFrame({"a": rng.randn(50).astype(str)})  # numeric strings
@@ -239,3 +258,29 @@ def test_meta_fit_apply_and_roundtrip(tmp_path):
 def test_meta_fit_empty_raises():
     with pytest.raises(ValueError):
         mp.meta.fit([])
+
+
+# ---------------- explain ----------------
+
+def test_explain_linear_coefficients(reg_df):
+    report = mp.analyze(reg_df, target="target", probe_nonlinearity=False)
+    exp = report.explain(key="logreg", top=5)
+    assert exp.method == "coefficient"
+    assert exp.features and len(exp.features) <= 5
+    # names should be the real feature columns, not indices
+    names = {f for f, _ in exp.features}
+    assert names & set(reg_df.drop(columns="target").columns)
+
+
+def test_explain_tree_importances(clf_df):
+    report = mp.analyze(clf_df, target="target", probe_nonlinearity=False)
+    exp = report.explain(key="random_forest", top=4)
+    assert exp.method == "impurity"
+    assert all(v >= 0 for _, v in exp.features)
+
+
+def test_explain_permutation_fallback(clf_df):
+    report = mp.analyze(clf_df, target="target", probe_nonlinearity=False)
+    exp = report.explain(key="knn", top=3)
+    assert exp.method == "permutation"
+    assert exp.features

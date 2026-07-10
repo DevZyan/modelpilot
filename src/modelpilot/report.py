@@ -160,6 +160,16 @@ class DatasetReport:
             fh.write(html)
         return path
 
+    def explain(self, key: str | None = None, top: int = 15):
+        """Fit a recommended model and rank the features it relies on.
+
+        Defaults to the top recommendation; pass ``key`` to explain another
+        family. Returns an :class:`~modelpilot.explain.Explanation`.
+        """
+        from .explain import explain as _explain
+        key = key or self.recommendations[0].key
+        return _explain(self._X, self._y, self.profile, key, top=top)
+
     def leaderboard_summary(self, top_k: int = 5, cv: int = 5) -> str:
         """Pretty-print the combined heuristic + benchmark leaderboard."""
         rows = self.leaderboard(top_k=top_k, cv=cv)
